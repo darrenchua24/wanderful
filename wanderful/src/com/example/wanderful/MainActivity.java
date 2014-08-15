@@ -1,66 +1,251 @@
-package com.example.wanderful;
+
+package com.example.mapscanner;
+
+import java.io.IOException;
+import java.util.ArrayList;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap.OnMarkerClickListener;
+import com.google.android.gms.maps.MapFragment;
+
 import com.google.android.gms.maps.GoogleMap;
-import android.support.v4.app.FragmentActivity;
+import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Bundle;
+
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
+
+import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.os.Bundle;
-import android.widget.Toast;
-import com.google.android.gms.maps.MapFragment;
-import com.google.android.gms.maps.model.CameraPosition;
-import com.google.android.gms.maps.model.LatLng;
 
-import android.support.v4.app.Fragment;
-import android.util.Log;
 
-public class MainActivity extends FragmentActivity implements LocationListener {
-	
+public class MainActivity extends Activity implements SensorEventListener, LocationListener, OnMarkerClickListener { //for events on change. 
+
+	// global variables
 	private GoogleMap googleMap;
-	
+	private SensorManager mSensorManager;
+	private Sensor magSensor;
+	private Sensor accSensor;
+	private double latitude,longitude;
+	float[] mGravity; // no more compass api 
+	float[] mGeomagnetic; 
+	float azimut; //compass direction 
+	ArrayList<LatLng> allLocations = new ArrayList<LatLng>(); //an array of all coordinates. 
+	Polyline joinLine; // red line 
+
+	ArrayList<String> markerInfoArray; // {markerName/markerTitle/markerDetails}
+
+	/*
+	 *  Auto-generated method stubs for implemented protocols(non-Javadoc)
+	 */
 	@Override
-	protected void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main);
-		try {
-            // Loading map
-            initilizeMap();
- 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+	public void onProviderDisabled(String provider) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void onProviderEnabled(String provider) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void onStatusChanged(String provider, int status, Bundle extras) {
+		// TODO Auto-generated method stub
+	}
+
+	public void onAccuracyChanged(Sensor sensor, int accuracy) {  }
+
+
+	/*
+	 *  Event Listeners
+	 */
+
+	// listen for marker click
+	@Override
+	public boolean onMarkerClick(final Marker marker){
+		marker.showInfoWindow();
+		Log.i("title: ",marker.getTitle());
+		Log.i("hc: ",Integer.toString(marker.hashCode())); // unique code (Title)
+
+
+		for(String s : markerInfoArray){
+			String placeHash = s.split("/")[0]; // "/" is delimiter
+			if(marker.getTitle().equals(placeHash)){
+				String placeDetails = s.split("/")[2];
+				String placeName = s.split("/")[1];
+
+				Intent detailsScreen = new Intent(getApplicationContext(),detailsView.class);
+				detailsScreen.putExtra("placeDetails",placeDetails); // cheapstake method
+				detailsScreen.putExtra("placeTitle",placeName);
+				startActivity(detailsScreen);
+			}
+		}
+		return true;
+	}
+
+	public double calcBearing(LatLng from, LatLng to){
+
+		double dLon = (to.longitude - from.longitude);
+		double y = Math.sin(dLon)*Math.cos(to.latitude);
+		double x = Math.cos(from.latitude)*Math.sin(to.latitude) - Math.sin(from.latitude)*Math.cos(to.latitude)*Math.cos(dLon);
+		double bearing = Math.atan2(y, x);
+
+		return bearing;
+	}
+
+	// listen for compass change event
+	public void onSensorChanged(SensorEvent event) {
+		if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+			mGravity = event.values;
+		if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
+			mGeomagnetic = event.values;
+		if (mGravity != null && mGeomagnetic != null) {
+			float R[] = new float[9];
+			float I[] = new float[9];
+			boolean success = SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic); // calc the value of compass, accele?? etc
+			if (success) {
+				float orientation[] = new float[3]; // pointer
+				SensorManager.getOrientation(R, orientation);
+				azimut = orientation[0]; // orientation contains: azimut, pitch and roll
+				//Log.i("orientation",Float.toString(azimut));
+				CameraPosition pos = CameraPosition.builder().target(new LatLng(latitude,longitude)).bearing((float)Math.toDegrees(azimut)).zoom(18).build();
+				googleMap.moveCamera(CameraUpdateFactory.newCameraPosition(pos)); // draw new bearing on gMaps
+				
+				drawPolyLine();
+			}
+		}
 	}
 	
-	private void initilizeMap() {
-        if (googleMap == null) {
-            // check if map is created successfully or not
-        	googleMap.setMyLocationEnabled(true); // false to disable
-        	googleMap.getUiSettings().setMyLocationButtonEnabled(true);
-        	googleMap = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
-            if (googleMap == null) {
-                Toast.makeText(getApplicationContext(),
-                        "Sorry! unable to create maps", Toast.LENGTH_SHORT)
-                        .show();
-            }
-            getLocation();
-        }
-    }
+	public void drawPolyLine(){
+		// this function will draw the polyline
+		LatLng myLocation = new LatLng(latitude,longitude);
+		LatLng pointedLocation = new LatLng(latitude,longitude);
+		double closestBearing = 9999; // sentinel value
+		// sort array according to distance to allow closest point to be set IN CASE got some bearings
+		for(int i = 0 ; i < allLocations.size() ; i++){
+			double currentBearing = calcBearing(myLocation,allLocations.get(i));
+			//Log.i("currentBearing",Double.toString(currentBearing));
+			//Log.i("azimut",Float.toString(azimut));
+			if(Math.abs((currentBearing-azimut)) < closestBearing){
+				closestBearing = Math.abs(currentBearing-azimut);
+				pointedLocation = new LatLng(allLocations.get(i).latitude,allLocations.get(i).longitude);
+			}
+			//Log.i("closestBearing",Double.toString(closestBearing));
+		}
+		if(joinLine != null){
+			ArrayList<LatLng>points = new ArrayList<LatLng>();
+			points.add(new LatLng(latitude,longitude));
+			points.add(pointedLocation);
+			joinLine.setPoints(points); // array<LatLng> from, to
+		}
+		else{
+			joinLine = googleMap.addPolyline(new PolylineOptions()
+			.add(new LatLng(latitude,longitude),pointedLocation).width(5).color(Color.RED));
+		}
+	}
+
+	// listen for when GPS coord change
+	public void onLocationChanged(Location location){
+		// Getting latitude of the current location
+		latitude = location.getLatitude();
+
+		// Getting longitude of the current location
+		longitude = location.getLongitude();
+		Log.i("latLng",latitude+", "+longitude);
+		// Creating a LatLng object for the current location
+		LatLng latLng = new LatLng(latitude, longitude);
+
+		CameraPosition cameraPosition = new CameraPosition.Builder().target(
+				latLng).zoom(18).build();
+
+		googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+		drawPolyLine();
+	}
+
+	/*
+	 * Initialization methods
+	 */
+	public void initSensor(){ //start sensor for listener to be called
+		Log.i("sensor","init");
+		mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
+		magSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+		accSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+	}
+
+	/*
+	 * Networking methods
+	 */
+
+	@Override
+	protected void onCreate(Bundle savedInstanceState) { //main starting point 
+		super.onCreate(savedInstanceState); 
+		setContentView(R.layout.activity_main); // link UI to main class
+
+		Button btnNextScreen = (Button) findViewById(R.id.btnNextScreen); //POI button
+		btnNextScreen.setOnClickListener(new View.OnClickListener() {// set listerner to find click
+
+			public void onClick(View arg0) {
+				//Starting a new Intent/screen 
+				Intent nextScreen = new Intent(getApplicationContext(), poiView.class);
+				nextScreen.putExtra("locationCoords", "?locationCoords="+Double.toString(latitude)+","+Double.toString(longitude)); // restrict to only surrounding location
+				startActivity(nextScreen); // launch next screen 
+
+			}
+		});
+
+		markerInfoArray = new ArrayList<String>();
+		initSensor(); 
+
+		try {
+			// Loading map
+			initilizeMap();
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+	}
 	
-	LocationManager locationManager;
-	boolean isGPSEnabled,isNetworkEnabled,canGetLocation;
 	// The minimum distance to change Updates in meters
-    private static final long MIN_DISTANCE_CHANGE_FOR_UPDATES = 0; // 10 meters
+    private static final long MIN_DISTANCE_CHANGE_FOR_UPDATES = 0; // 0 meters
  
     // The minimum time between updates in milliseconds
-    private static final long MIN_TIME_BW_UPDATES = 0; // 1 minute
-    double latitude,longitude;
-	public Location getLocation() {
-		Log.v("here","here");
-		Location location = null;
-        try {
+    private static final long MIN_TIME_BW_UPDATES = 1000 * 1; // 1 second
+    
+	private void initilizeMap() {
+		
+		LocationManager locationManager;
+		boolean isGPSEnabled, isNetworkEnabled;
+		try {
+            Location location = null; // location
             locationManager = (LocationManager)getSystemService(LOCATION_SERVICE);
  
             // getting GPS status
@@ -73,43 +258,37 @@ public class MainActivity extends FragmentActivity implements LocationListener {
  
             if (!isGPSEnabled && !isNetworkEnabled) {
                 // no network provider is enabled
+            	Log.i("err net","No network");
             } else {
-                this.canGetLocation = true;
                 // First get location from Network Provider
                 if (isNetworkEnabled) {
                     locationManager.requestLocationUpdates(
                             LocationManager.NETWORK_PROVIDER,
                             MIN_TIME_BW_UPDATES,
-                            MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
-                    Log.v("Network", "Network");
+                            MIN_DISTANCE_CHANGE_FOR_UPDATES, this); //enable listerner 
+                    Log.i("Network", "Network");
                     if (locationManager != null) {
                         location = locationManager
-                                .getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                                .getLastKnownLocation(LocationManager.NETWORK_PROVIDER); //if cannot get current, get last
                         if (location != null) {
-                            latitude = location.getLatitude();
+                            latitude = location.getLatitude();// set values to lat and long 
                             longitude = location.getLongitude();
                         }
                     }
                 }
-                // if GPS Enabled get lat/long using GPS Services
                 if (isGPSEnabled) {
                     if (location == null) {
                         locationManager.requestLocationUpdates(
                                 LocationManager.GPS_PROVIDER,
-                                MIN_TIME_BW_UPDATES,
-                                MIN_DISTANCE_CHANGE_FOR_UPDATES, this);
-                        Log.d("GPS Enabled", "GPS Enabled");
+                                MIN_TIME_BW_UPDATES, // min time to update time 
+                                MIN_DISTANCE_CHANGE_FOR_UPDATES, this);// enable listener
+                        Log.i("GPS Enabled", "GPS Enabled");
                         if (locationManager != null) {
                             location = locationManager
                                     .getLastKnownLocation(LocationManager.GPS_PROVIDER);
                             if (location != null) {
                                 latitude = location.getLatitude();
-                                longitude = location.getLongitude();
-                                Log.v("title",latitude+", "+longitude);
-                                CameraPosition cameraPosition = new CameraPosition.Builder().target(
-                                        new LatLng(location.getLatitude(), location.getLongitude())).zoom(12).build();
-                         
-                        googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+                                longitude = location.getLongitude(); 
                             }
                         }
                     }
@@ -119,33 +298,112 @@ public class MainActivity extends FragmentActivity implements LocationListener {
         } catch (Exception e) {
             e.printStackTrace();
         }
- 
-        return location;
-    }
-	
-	public void onLocationChanged(Location location) {
-		Log.v("here","here");
-		CameraPosition cameraPosition = new CameraPosition.Builder().target(
-                new LatLng(location.getLatitude(), location.getLongitude())).zoom(12).build();
- 
-googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
-    }
 
-	@Override
-	public void onStatusChanged(String provider, int status, Bundle extras) {
-		// TODO Auto-generated method stub
-		
+		if (googleMap == null) {
+			googleMap = ((MapFragment) getFragmentManager().findFragmentById(
+					R.id.map)).getMap();
+			googleMap.setOnMarkerClickListener(this); // for marker events
+			googleMap.setMyLocationEnabled(true);
+			googleMap.getUiSettings().setCompassEnabled(true);
+			
+			/*
+
+			LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+
+			locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 10, this);
+			locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0,10, this);
+			
+			*/
+			
+			
+			getLocations(); // pull from server 
+
+			// check if map is created successfully or not
+			if (googleMap == null) {
+				Toast.makeText(getApplicationContext(),
+						"Sorry! unable to create maps", Toast.LENGTH_SHORT)
+						.show();
+			}
+		}
+
 	}
 
-	@Override
-	public void onProviderEnabled(String provider) {
-		// TODO Auto-generated method stub
-		
+	public void getLocations(){
+		new sendDataAsync().execute(); // execute() is API
 	}
 
-	@Override
-	public void onProviderDisabled(String provider) {
-		// TODO Auto-generated method stub
-		
+	private class sendDataAsync extends AsyncTask<String, Integer, String>{ // AsyncTask is the type of class
+
+		@Override
+		protected String doInBackground(String... arg0) { // derivate from main thread, run in background
+			String responseString = "";
+			String url = "http://benappdev.com/others/wanderful/getLocations.php?locationCoords="+Double.toString(latitude)+","+Double.toString(longitude); // add loc coords
+			HttpResponse response = null;
+			try {
+				HttpClient client = new DefaultHttpClient();
+				response = client.execute(new HttpGet(url));
+				responseString = EntityUtils.toString(response.getEntity()); // only get body
+				Log.i("resp: ",responseString);
+
+			} catch(IOException e) {
+
+			}
+			return responseString;
+		}
+		protected void onPostExecute(String result) { // when connection is completed
+			Log.i("result",result);
+			try {
+				JSONArray locationsArray = (JSONArray) new JSONTokener(result).nextValue(); // parse string into array.
+				Log.d("json",locationsArray.toString(4));
+				/*
+				LatLng closestPlace = new LatLng(1,1);
+				double closestBearing = 100;
+				boolean gotPlace = false;
+				 */
+				for(int i = 0 ; i < locationsArray.length() ; i++){
+					JSONObject locationObject = locationsArray.getJSONObject(i);
+					String placeName = locationObject.getString("placeName");
+					String placeCoord = locationObject.getString("placeCoord");
+					String placeTitle = locationObject.getString("placeTitle");
+					String placeSnippet = locationObject.getString("placeSnippet");
+					String placeDetails = locationObject.getString("placeDetails");
+
+					double placeLat = Double.parseDouble(placeCoord.split(",")[0]);
+					double placeLon = Double.parseDouble(placeCoord.split(",")[1]);
+
+					allLocations.add(new LatLng(placeLat,placeLon));
+
+					/*
+					double currentBearing = Math.atan((latitude-placeLat)/(longitude/placeLon));
+					if(currentBearing < closestBearing){
+						closestBearing = currentBearing;
+						closestPlace = new LatLng(placeLat,placeLon);
+						gotPlace = true;
+					}
+
+					if(gotPlace){
+						joinLine = googleMap.addPolyline(new PolylineOptions()
+						.add(new LatLng(latitude,longitude),closestPlace).width(5).color(Color.RED));
+					}
+					 */
+					MarkerOptions marker = new MarkerOptions().position(new LatLng(placeLat,placeLon)).title(placeTitle).snippet(placeSnippet); // create new custom marker
+					googleMap.addMarker(marker).showInfoWindow();
+					markerInfoArray.add(placeTitle+"/"+placeName+"/"+placeDetails);
+				}
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 	}
+
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+		mSensorManager.registerListener(this, magSensor, SensorManager.SENSOR_DELAY_UI);
+		mSensorManager.registerListener(this, accSensor, SensorManager.SENSOR_DELAY_UI);
+		initilizeMap();
+	}
+
 }
