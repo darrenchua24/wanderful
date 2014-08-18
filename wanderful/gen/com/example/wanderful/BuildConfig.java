@@ -1,5 +1,5 @@
 /** Automatically generated file. DO NOT MODIFY */
-package com.example.mapscanner;
+package com.example.wanderful;
 
 public final class BuildConfig {
     public final static boolean DEBUG = true;

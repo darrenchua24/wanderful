@@ -1,5 +1,5 @@
 
-package com.example.mapscanner;
+package com.example.wanderful;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -14,6 +14,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
+import com.example.wanderful.R;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap.OnMarkerClickListener;
 import com.google.android.gms.maps.MapFragment;
@@ -27,7 +28,6 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -81,6 +81,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		// TODO Auto-generated method stub
 	}
 
+	@Override
 	public void onAccuracyChanged(Sensor sensor, int accuracy) {  }
 
 
@@ -91,17 +92,27 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	// listen for marker click
 	@Override
 	public boolean onMarkerClick(final Marker marker){
+		Log.i("here","here");
 		marker.showInfoWindow();
 		Log.i("title: ",marker.getTitle());
 		Log.i("hc: ",Integer.toString(marker.hashCode())); // unique code (Title)
-
-
 		for(String s : markerInfoArray){
 			String placeHash = s.split("/")[0]; // "/" is delimiter
 			if(marker.getTitle().equals(placeHash)){
-				String placeDetails = s.split("/")[2];
-				String placeName = s.split("/")[1];
-
+				Log.i("s",s);
+				
+				String[] placeArray = s.split("/");
+				String placeDetails;
+				String placeName;
+				if(placeArray.length == 3){
+					placeName = placeArray[1];
+					placeDetails = placeArray[2];
+				}
+				else{
+					placeName = placeArray[1];
+					placeDetails = "";
+				}
+				
 				Intent detailsScreen = new Intent(getApplicationContext(),detailsView.class);
 				detailsScreen.putExtra("placeDetails",placeDetails); // cheapstake method
 				detailsScreen.putExtra("placeTitle",placeName);
@@ -122,6 +133,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	}
 
 	// listen for compass change event
+	@Override
 	public void onSensorChanged(SensorEvent event) {
 		if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
 			mGravity = event.values;
@@ -136,7 +148,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 				SensorManager.getOrientation(R, orientation);
 				azimut = orientation[0]; // orientation contains: azimut, pitch and roll
 				//Log.i("orientation",Float.toString(azimut));
-				CameraPosition pos = CameraPosition.builder().target(new LatLng(latitude,longitude)).bearing((float)Math.toDegrees(azimut)).zoom(18).build();
+				CameraPosition pos = CameraPosition.builder().target(new LatLng(latitude,longitude)).bearing((float)Math.toDegrees(azimut)).zoom(16).build();
 				googleMap.moveCamera(CameraUpdateFactory.newCameraPosition(pos)); // draw new bearing on gMaps
 				
 				drawPolyLine();
@@ -173,6 +185,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	}
 
 	// listen for when GPS coord change
+	@Override
 	public void onLocationChanged(Location location){
 		// Getting latitude of the current location
 		latitude = location.getLatitude();
@@ -184,7 +197,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		LatLng latLng = new LatLng(latitude, longitude);
 
 		CameraPosition cameraPosition = new CameraPosition.Builder().target(
-				latLng).zoom(18).build();
+				latLng).zoom(16).build();
 
 		googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
 		drawPolyLine();
@@ -212,6 +225,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		Button btnNextScreen = (Button) findViewById(R.id.btnNextScreen); //POI button
 		btnNextScreen.setOnClickListener(new View.OnClickListener() {// set listerner to find click
 
+			@Override
 			public void onClick(View arg0) {
 				//Starting a new Intent/screen 
 				Intent nextScreen = new Intent(getApplicationContext(), poiView.class);
@@ -350,6 +364,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 			}
 			return responseString;
 		}
+		@Override
 		protected void onPostExecute(String result) { // when connection is completed
 			Log.i("result",result);
 			try {

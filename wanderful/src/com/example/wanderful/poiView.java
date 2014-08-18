@@ -1,4 +1,4 @@
-package com.example.mapscanner;
+package com.example.wanderful;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -12,6 +12,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
+
+import com.example.wanderful.R;
 
 
 import android.app.ListActivity;
@@ -28,7 +30,8 @@ public class poiView extends ListActivity{
     ArrayAdapter<String> adapter;
     ArrayList<ArrayList<String>> poiArray = new ArrayList<ArrayList<String>>();
     
-    protected void onListItemClick(ListView list, View view, int position, long id) {
+    @Override
+	protected void onListItemClick(ListView list, View view, int position, long id) {
         super.onListItemClick(list, view, position, id);
         String selectedPOI = (String)getListAdapter().getItem(position);
         for(int i = 0 ; i < poiArray.size() ; i++){
@@ -41,6 +44,7 @@ public class poiView extends ListActivity{
         }
     }
 	
+	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.poi_view);	 
@@ -75,6 +79,7 @@ public class poiView extends ListActivity{
 			}
 			return responseString;
 		}
+		@Override
 		protected void onPostExecute(String result) {
 			Log.v("result",result);
 			try {

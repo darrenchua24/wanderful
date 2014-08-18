@@ -1,4 +1,6 @@
-package com.example.mapscanner;
+package com.example.wanderful;
+
+import com.example.wanderful.R;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -11,6 +13,7 @@ import android.widget.TextView;
 
 public class detailsView extends Activity {
 	String placeTitle,placeDetails,placeSnippet;
+	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.details_view);
@@ -28,7 +31,8 @@ public class detailsView extends Activity {
 		Button prevButton = (Button) findViewById(R.id.backButton);
 		prevButton.setOnClickListener(new View.OnClickListener() {
 			 
-            public void onClick(View arg0) {
+            @Override
+			public void onClick(View arg0) {
                 finish();
             }
         });
