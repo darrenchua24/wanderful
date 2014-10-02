@@ -1,4 +1,4 @@
-mapscanner
+Wanderful
 ==========
 
-A map scanner app which helps users find interesting hotspots
+A mobile location pointing app on the Android platform
