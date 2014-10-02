@@ -59,6 +59,8 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	float[] mGeomagnetic; 
 	float azimut; //compass direction 
 	ArrayList<LatLng> allLocations = new ArrayList<LatLng>(); //an array of all coordinates. 
+	ArrayList<String> testLocations = new ArrayList<String>();
+	ArrayList<Marker> markerArray = new ArrayList<Marker>();
 	Polyline joinLine; // red line 
 
 	ArrayList<String> markerInfoArray; // {markerName/markerTitle/markerDetails}
@@ -114,7 +116,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 				}
 				
 				Intent detailsScreen = new Intent(getApplicationContext(),detailsView.class);
-				detailsScreen.putExtra("placeDetails",placeDetails); // cheapstake method
+				detailsScreen.putExtra("placeDetails",placeDetails); // cheapskate method
 				detailsScreen.putExtra("placeTitle",placeName);
 				startActivity(detailsScreen);
 			}
@@ -150,7 +152,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 				//Log.i("orientation",Float.toString(azimut));
 				CameraPosition pos = CameraPosition.builder().target(new LatLng(latitude,longitude)).bearing((float)Math.toDegrees(azimut)).zoom(16).build();
 				googleMap.moveCamera(CameraUpdateFactory.newCameraPosition(pos)); // draw new bearing on gMaps
-				
+				//mov cam
 				drawPolyLine();
 			}
 		}
@@ -162,15 +164,20 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		LatLng pointedLocation = new LatLng(latitude,longitude);
 		double closestBearing = 9999; // sentinel value
 		// sort array according to distance to allow closest point to be set IN CASE got some bearings
-		for(int i = 0 ; i < allLocations.size() ; i++){
-			double currentBearing = calcBearing(myLocation,allLocations.get(i));
-			//Log.i("currentBearing",Double.toString(currentBearing));
-			//Log.i("azimut",Float.toString(azimut));
+		//Log.i("azimut",Float.toString(azimut));
+		Marker currMarker = null;
+		for(int i = 0 ; i < markerArray.size() ; i++){
+			double currentBearing = calcBearing(myLocation,markerArray.get(i).getPosition());
+			//Log.i("currentBearing","Place: " + testLocations.get(i) + "  latlng: " + Double.toString(currentBearing));
 			if(Math.abs((currentBearing-azimut)) < closestBearing){
 				closestBearing = Math.abs(currentBearing-azimut);
 				pointedLocation = new LatLng(allLocations.get(i).latitude,allLocations.get(i).longitude);
+				currMarker = markerArray.get(i);
 			}
 			//Log.i("closestBearing",Double.toString(closestBearing));
+		}
+		if(currMarker != null){
+		currMarker.showInfoWindow();
 		}
 		if(joinLine != null){
 			ArrayList<LatLng>points = new ArrayList<LatLng>();
@@ -182,6 +189,14 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 			joinLine = googleMap.addPolyline(new PolylineOptions()
 			.add(new LatLng(latitude,longitude),pointedLocation).width(5).color(Color.RED));
 		}
+		/*
+		for(int i = 0 ; i < markerArray.size() ; i++){
+			Marker marker = markerArray.get(i);
+			if(marker.getPosition()==pointedLocation){
+				marker.showInfoWindow();
+			}
+		}
+		*/
 	}
 
 	// listen for when GPS coord change
@@ -199,7 +214,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		CameraPosition cameraPosition = new CameraPosition.Builder().target(
 				latLng).zoom(16).build();
 
-		googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+		googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition)); //move cam
 		drawPolyLine();
 	}
 
@@ -343,6 +358,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 	}
 
 	public void getLocations(){
+		Log.i("here","here");
 		new sendDataAsync().execute(); // execute() is API
 	}
 
@@ -351,7 +367,8 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 		@Override
 		protected String doInBackground(String... arg0) { // derivate from main thread, run in background
 			String responseString = "";
-			String url = "http://benappdev.com/others/wanderful/getLocations.php?locationCoords="+Double.toString(latitude)+","+Double.toString(longitude); // add loc coords
+			String url = "http://darren.ngrok.com/wanderful_Web/getLocations.php?locationCoords="+Double.toString(latitude)+","+Double.toString(longitude); // add loc coords
+			Log.i("url",url);
 			HttpResponse response = null;
 			try {
 				HttpClient client = new DefaultHttpClient();
@@ -370,11 +387,7 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 			try {
 				JSONArray locationsArray = (JSONArray) new JSONTokener(result).nextValue(); // parse string into array.
 				Log.d("json",locationsArray.toString(4));
-				/*
-				LatLng closestPlace = new LatLng(1,1);
-				double closestBearing = 100;
-				boolean gotPlace = false;
-				 */
+
 				for(int i = 0 ; i < locationsArray.length() ; i++){
 					JSONObject locationObject = locationsArray.getJSONObject(i);
 					String placeName = locationObject.getString("placeName");
@@ -387,22 +400,11 @@ public class MainActivity extends Activity implements SensorEventListener, Locat
 					double placeLon = Double.parseDouble(placeCoord.split(",")[1]);
 
 					allLocations.add(new LatLng(placeLat,placeLon));
+					testLocations.add(placeName);
 
-					/*
-					double currentBearing = Math.atan((latitude-placeLat)/(longitude/placeLon));
-					if(currentBearing < closestBearing){
-						closestBearing = currentBearing;
-						closestPlace = new LatLng(placeLat,placeLon);
-						gotPlace = true;
-					}
-
-					if(gotPlace){
-						joinLine = googleMap.addPolyline(new PolylineOptions()
-						.add(new LatLng(latitude,longitude),closestPlace).width(5).color(Color.RED));
-					}
-					 */
 					MarkerOptions marker = new MarkerOptions().position(new LatLng(placeLat,placeLon)).title(placeTitle).snippet(placeSnippet); // create new custom marker
-					googleMap.addMarker(marker).showInfoWindow();
+					Marker mar = googleMap.addMarker(marker);
+					markerArray.add(mar);
 					markerInfoArray.add(placeTitle+"/"+placeName+"/"+placeDetails);
 				}
 			} catch (JSONException e) {

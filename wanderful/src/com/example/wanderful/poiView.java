@@ -66,7 +66,7 @@ public class poiView extends ListActivity{
 		@Override
 		protected String doInBackground(String...arg0) {
 			String responseString = "";
-			String url = "http://benappdev.com/others/wanderful/getLocations.php"+arg0[0]; // add loc coords
+			String url = "http://darren.ngrok.com/wanderful_Web/getLocations.php"+arg0[0]; // add loc coords
 			HttpResponse response = null;
 			try {
 				HttpClient client = new DefaultHttpClient();
